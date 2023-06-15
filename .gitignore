@@ -1,0 +1,5 @@
+# temp files directories
+**/.DS_Store
+**/._*
+**/*.db
+**/.vscode

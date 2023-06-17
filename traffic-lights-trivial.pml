@@ -1,5 +1,5 @@
 #define CHAN_SIZE 4
-// #define TRAFFIC_LIGHTS_NUM 3
+#define TRAFFIC_LIGHTS_NUM 4
 #define n_sense_nempty (len(n_sense) != 0)
 #define e_sense_nempty (len(e_sense) != 0)
 #define s_sense_nempty (len(s_sense) != 0)
@@ -10,120 +10,198 @@ chan n_sense = [CHAN_SIZE] of {bool};
 chan s_sense = [CHAN_SIZE] of {bool};
 chan e_sense = [CHAN_SIZE] of {bool};
 chan p_sense = [CHAN_SIZE] of {bool};
-bool ns_lock = false, we_lock = false;
+bool ns_lock = false, we_lock = false, p_lock = false;
 
-// bool fair_array[TRAFFIC_LIGHTS_NUM];
+bool check_array[TRAFFIC_LIGHTS_NUM];
 
 
 mtype = { red, green };
-mtype n_light, s_light, e_light, p_light = red;
+mtype n_light, s_light, e_light = red, p_light = red;
 
-// inline fair_check(pointer) {
-//     printf("pointer = %d", pointer);
-//     fair_array[pointer] = true;
-//     bool result = true;
-//     int i;
-//     for (i : 0 .. (TRAFFIC_LIGHTS_NUM - 1)) {
-//         if
-//             :: fair_array[i] == false -> printf("elem=%d", i); result = false;
-//             :: else -> skip;
-//         fi;
-//     };
-//     printf("result = %d", result);
-//     if
-//         :: result == true ->
-//             for (i : 0 .. (TRAFFIC_LIGHTS_NUM - 1)) {
-//                 fair_array[i] = false;
-//         };
-//         :: else -> skip;
-//     fi;
-// }
+inline check(pointer) {
+    // printf("pointer = %d\n", pointer);
+    check_array[pointer] = true;
+    bool result = true;
+    int i;
+    for (i : 0 .. (TRAFFIC_LIGHTS_NUM - 1)) {
+        if
+            :: check_array[i] == false -> 
+                result = false;
+                // printf("elem=%d\n", i);
+            :: else -> skip;
+        fi;
+    };
+    // printf("result = %d\n", result);
+    if
+        :: result == true ->
+            for (i : 0 .. (TRAFFIC_LIGHTS_NUM - 1)) {
+                check_array[i] = false;
+            };
+        :: else -> skip;
+    fi;
+}
 
-active proctype N() {
+active proctype N_con() {
     printf("Start N\n");
+    int process_num = 0;
     do
        :: if
-             :: len(n_sense) > 0 -> (!we_lock) -> ns_lock = true; n_light = green;
-                printf("N light green\n"); n_sense?n_buf; n_light = red; ns_lock = false; printf("N light red\n");
-
-          fi; // fair_check(0);
+             :: len(n_sense) > 0 && !check_array[process_num] -> 
+                (!we_lock) ->
+                {
+                    ns_lock = true;
+                    atomic 
+                    {
+                        n_light = green;
+                        printf("N light green\n");
+                    }
+                    n_sense?n_buf;
+                    ns_lock = false;
+                    atomic
+                    {
+                        n_light = red;
+                        printf("N light red\n");
+                    }
+                }
+            :: else -> skip;
+          fi; 
+          check(process_num);
     od;
 }
 
 active proctype N_gen() {
     printf("N gen start\n");
     do
-         :: n_sense!true; printf("N car generated\n");
+         :: atomic
+         {
+             n_sense!true;
+             printf("N car generated\n");
+         }
     od;
 }
 
-active proctype E() {
+active proctype E_con() {
+    printf("Start E\n");
+    int process_num = 1;
     do
     :: if
-         :: len(e_sense) > 0 -> (!ns_lock) -> we_lock = true; e_light = green;
-            printf("E light green\n"); e_sense?e_buf; e_light = red; we_lock = false; printf("E light red\n");
-    fi; // fair_check(1);
+        :: len(e_sense) > 0 && !check_array[process_num] ->
+            (!ns_lock && !p_lock) ->
+            {
+                we_lock = true;
+                atomic
+                {
+                    e_light = green;
+                    printf("E light green\n");
+                }
+                e_sense?e_buf;
+                we_lock = false;
+                atomic
+                {
+                    e_light = red;
+                    printf("E light red\n");
+                }
+            }
+        :: else -> skip;
+    fi;
+    check(process_num);
     od;
 }
 
 active proctype E_gen() {
     printf("E gen start\n");
     do
-         :: e_sense!true; printf("E car generated\n");
+         :: atomic
+         {
+             e_sense!true;
+             printf("E car generated\n");
+         }
     od;
 }
 
-active proctype P() {
-    do
-    :: if
-         :: len(p_sense) > 0 -> (!we_lock) -> we_lock = true; p_light = green;
-            printf("P light green\n"); p_sense?p_buf; p_light = red; we_lock = false; printf("P light red\n");
-    fi; // fair_check(1);
-    od;
-}
-
-active proctype P_gen() {
-    printf("P gen start\n");
-    do
-         :: p_sense!true; printf("P generated\n");
-    od;
-}
-
-active proctype S() {
+active proctype S_con() {
     printf("Start S\n");
+    int process_num = 2;
     do
        :: if
-             :: len(s_sense) > 0 -> (!we_lock) -> ns_lock = true; s_light = green;
-                printf("S light green\n"); s_sense?s_buf; s_light = red; ns_lock = false; printf("S light red\n");
-
-          fi; // fair_check(0);
+             :: len(s_sense) > 0 && !check_array[process_num] ->
+                (!we_lock) ->
+                {
+                    ns_lock = true;
+                    atomic
+                    {
+                        s_light = green;
+                        printf("S light green\n");
+                    }
+                    s_sense?s_buf;
+                    ns_lock = false;
+                    atomic
+                    {
+                        s_light = red;
+                        printf("S light red\n");
+                    }
+                }
+            :: else -> skip;
+          fi; 
+          check(process_num);
     od;
 }
 
 active proctype S_gen() {
     printf("S gen start\n");
     do
-         :: s_sense!true; printf("S car generated\n");
+         :: atomic
+         {
+             s_sense!true;
+             printf("S car generated\n");
+         }
     od;
 }
 
-// active proctype init() {
-//     run N();
-//     run N_gen();
-//     run E();
-//     run E_gen();
-//     run P();
-//     run P_gen();
-//     run S();
-//     run S_gen();
-// }
+active proctype P_con() {
+    printf("Start P\n");
+    int process_num = 3;
+    do
+        :: if
+            :: len(p_sense) > 0 && !check_array[process_num] ->
+                (!we_lock) ->
+                {
+                    we_lock = true;
+                    atomic
+                    {
+                        p_light = green;
+                        printf("P light green\n");
+                    }
+                    p_sense?p_buf;
+                    we_lock = false;
+                    atomic
+                    {
+                        p_light = red;
+                        printf("P light red\n");
+                    }
+                }
+            :: else -> skip;
+        fi;
+        check(process_num);
+    od;
+}
 
+active proctype P_gen() {
+    printf("P gen start\n");
+    do
+         :: atomic
+         {
+             p_sense!true;
+             printf("P generated\n");
+         }
+    od;
+}
 
-ltl s1 {[] !((n_light == green) && (e_light == green))};
+ltl s1 {[] !((n_light == green) && (s_light == green) && (e_light == green))};
 
 ltl s2 {[] !((e_light == green) && (s_light == green) && (n_light == green) && (p_light == green))};
 
-ltl s3 {[] !((s_light == green) && (e_light == green))};
+ltl s3 {[] !((e_light == green) && (p_light == green))};
 
 ltl l1 {(
             ([]<> !((n_light == green) && n_sense_nempty))

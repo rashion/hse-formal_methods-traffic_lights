@@ -3,3 +3,6 @@
 **/._*
 **/*.db
 **/.vscode
+**/pan
+**/pan.*
+**/*.trail
